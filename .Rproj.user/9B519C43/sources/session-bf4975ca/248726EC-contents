@@ -1,0 +1,73 @@
+###############################################################################
+### Web Scraping - Supermercado más barato (PSO) ##############################
+###############################################################################
+
+# cargar librerias
+library(rvest)
+library(data.table)
+library(dplyr)
+library(robotstxt)
+
+# leer url
+url <- "https://supermercadomasbarato.com/categoria-producto/abarrotes/harinas-y-mezclas-listas/"
+
+# ver si es permitido hacer web_scraping
+paths_allowed(path = url)
+
+# leer html
+webpage <- read_html(url)
+
+# extraer SKU
+SKU <- webpage %>%
+  html_nodes(".woocommerce-loop-product__title") %>%
+  html_text(trim = T)
+
+# Precio
+precio <- webpage %>%
+  html_nodes(".price") %>%
+  html_text(trim = TRUE) %>%
+  gsub("[\\$,]", "", .) %>%
+  as.numeric()
+
+# stock
+stock <- webpage %>%
+  html_nodes(".input-text.qty.text") %>%
+  html_attr("max") %>%
+  as.numeric()
+
+# disponibilidad
+disponibilidad <- webpage %>%
+  html_nodes(".button.product_type_simple") %>%
+  html_text(trim = T)
+
+# Links
+links <- webpage %>%
+  html_nodes(".woocommerce-LoopProduct-link") %>%
+  html_attr("href")
+
+# unir elementos en un data.table
+harinas <- data.table(
+  SKU = SKU,
+  Precio = precio,
+  Disponibilidad = disponibilidad,
+  Links = links
+)
+
+# crear la columna stock en nuestro data.table
+harinas[, stock := fcase(
+  Disponibilidad == "Add to cart", stock[1:.N],  # Ajusta la longitud de stock
+  Disponibilidad == "Read more", 0
+)]
+
+# ver resultados
+head(harinas)
+
+# exportar nuestro data.table
+fwrite(harinas,
+       "output/maestra_MT_coordenadas_nuevas.csv",
+       sep = ";",
+       bom = T,
+       quote = T,
+       dec = ".",
+       row.names = F,
+       encoding = "UTF-8")
